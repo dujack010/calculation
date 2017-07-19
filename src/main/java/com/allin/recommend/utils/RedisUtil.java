@@ -18,6 +18,7 @@ public class RedisUtil {
     //private String pwd = "admin";
     //private int port = 6379;
     private int port = 11818;
+    private static JedisPoolConfig config;
 
     //单点
     private Jedis jedis;
@@ -25,12 +26,17 @@ public class RedisUtil {
     private JedisPool pool;
 
     public RedisUtil() {
-        JedisPoolConfig config = new JedisPoolConfig();
-        pool = new JedisPool(config,host,port,2000,pwd,0);
+        config = new JedisPoolConfig();
     }
 
     public JedisPool getPool() {
+        this.pool = new JedisPool(config,host,port,2000,pwd,0);
         return pool;
+    }
+
+    public void closePool(){
+        this.pool.close();
+        System.out.println("redis连接池关闭");
     }
 
     @PreDestroy

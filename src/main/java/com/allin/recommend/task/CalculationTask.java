@@ -1,11 +1,14 @@
 package com.allin.recommend.task;
 
 import com.allin.recommend.admin.BaseHbaseAdminAction;
+import com.allin.recommend.pojo.BatchBean;
 import com.allin.recommend.pojo.SingleBean;
 import com.allin.recommend.service.HBaseService;
 import com.allin.recommend.utils.RedisUtil;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -19,7 +22,7 @@ import java.util.*;
  */
 @Component
 public class CalculationTask extends BaseHbaseAdminAction {
-    private static final String liveKey = "recommend:customer:activated";
+    private static final Logger logger = LoggerFactory.getLogger(CalculationTask.class);
 
     @Autowired
     HBaseService service;
@@ -28,11 +31,18 @@ public class CalculationTask extends BaseHbaseAdminAction {
     SingleBean singleBean;
 
     @Autowired
+    BatchBean batchBean;
+
+    @Autowired
     RedisUtil redisUtil;
+
+    private static final String liveKey = "recommend:customer:activated";
+
+    private static List<Put> batchList = new ArrayList<>();
 
     @Scheduled(cron = "0 0/15 * * * ?")
     public void recommendResource() throws InterruptedException {
-        System.out.println("开始执行");
+        logger.info("开始执行");
         Jedis jedis = redisUtil.getPool().getResource();
         Pipeline pipelined = jedis.pipelined();
         //Set<String> users = jedis.smembers(liveKey);
@@ -40,16 +50,19 @@ public class CalculationTask extends BaseHbaseAdminAction {
         System.out.println(scard);
         Set<String> smembers = jedis.smembers(liveKey);
         calculation(smembers);
-        System.out.println("计算完成");
+        logger.info("计算完成");
         for (String userId : smembers) {
             pipelined.srem(liveKey,userId);
         }
         pipelined.sync();
         jedis.close();
+        redisUtil.closePool();
+        service.closeConnection();
     }
 
     private void calculation(Set<String> idList) throws InterruptedException {
-        System.out.println("进入方法");
+        logger.info("开始计算");
+        batchBean.setTableName(recommendList);
         Scan scan = new Scan();
         singleBean.setTableName(itemProfile);
         singleBean.setScan(scan);
@@ -70,7 +83,7 @@ public class CalculationTask extends BaseHbaseAdminAction {
                 continue;
             }
             Collection<byte[]> userProfileValues = userProfileFamilyMap.values();
-            Set<Map.Entry<byte[], byte[]>> userSet = userProfileFamilyMap.entrySet();
+            //Set<Map.Entry<byte[], byte[]>> userSet = userProfileFamilyMap.entrySet();
             Put put = new Put(Bytes.toBytes(customerId));
             int counter = 0;
             for (Result result : itemProfileResult) {
@@ -99,7 +112,7 @@ public class CalculationTask extends BaseHbaseAdminAction {
                     //bottom2 += Math.pow(ia,2);
                 }*/
                 double itemScore = topSum / (Math.sqrt(bottom1) * Math.sqrt(bottom2));
-                if(!Double.isNaN(itemScore)){
+                if(itemScore>=0){
                     String familyName = getFamilyName(resourceId);
                     if(familyName.length()>1){
                         put.addColumn(Bytes.toBytes(familyName),Bytes.toBytes(resourceId),Bytes.toBytes(itemScore));
@@ -107,14 +120,24 @@ public class CalculationTask extends BaseHbaseAdminAction {
                     }
                 }
             }
+            logger.info("用户"+customerId+"保存结果数量"+counter);
             if(counter>0){
-                singleBean.setTableName(recommendList);
+                batchList.add(put);
+                if(batchList.size()>=100){
+                    batchBean.setPutList(batchList);
+                    service.batchPut(batchBean);
+                    batchList.clear();
+                }
+                /*singleBean.setTableName(recommendList);
                 singleBean.setPut(put);
-                service.put(singleBean);
-                System.out.println("用户"+customerId+"保存结果");
+                service.put(singleBean);*/
             }
             long end = System.currentTimeMillis();
-            System.out.println("用户"+customerId+"处理用时"+(end-start));
+            logger.info("用户"+customerId+"处理用时"+(end-start));
+        }
+        if(batchList.size()>0){
+            batchBean.setPutList(batchList);
+            service.batchPut(batchBean);
         }
     }
 

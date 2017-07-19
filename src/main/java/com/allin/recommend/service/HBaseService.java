@@ -32,4 +32,8 @@ public class HBaseService extends HBaseAdmin {
     public void batchPut(BatchBean bean){
         super.batchPut(bean);
     }
+
+    public void closeConnection() {
+        super.closeConnection();
+    }
 }

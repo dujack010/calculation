@@ -47,4 +47,16 @@ public class HBaseUtil {
         }
         return this.con;
     }
+
+    public void closeConnection(){
+        if(con!=null){
+            try {
+                this.con.close();
+                System.out.println("连接关闭");
+                this.con=null;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }

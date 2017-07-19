@@ -34,7 +34,7 @@ public class HBaseAdmin {
             table = util.getConnection().getTable(TableName.valueOf(bean.getTableName()));
             table.put(putList);
             long end = System.currentTimeMillis();
-            System.out.println("HBASE批量用时:"+(end-start));
+            logger.info("HBASE批量用时:"+(end-start));
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -54,12 +54,12 @@ public class HBaseAdmin {
     public void put(SingleBean bean){
         long start = System.currentTimeMillis();
         Put put = bean.getPut();
-        Table table = null;
+        HTable table = null;
         try {
-            table = util.getConnection().getTable(TableName.valueOf(bean.getTableName()));
+            table = (HTable) util.getConnection().getTable(TableName.valueOf(bean.getTableName()));
             table.put(put);
             long end = System.currentTimeMillis();
-            System.out.println("HBASE用时:"+(end-start));
+            logger.info("HBASE put用时:"+(end-start));
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -85,7 +85,7 @@ public class HBaseAdmin {
             table = util.getConnection().getTable(TableName.valueOf(bean.getTableName()));
             Result result = table.get(get);
             long end = System.currentTimeMillis();
-            System.out.println("HBASE GET用时:"+(end-start));
+            logger.info("HBASE GET用时:"+(end-start));
             return result;
         } catch (IOException e) {
             e.printStackTrace();
@@ -144,5 +144,9 @@ public class HBaseAdmin {
                 }
             }
         }
+    }
+
+    public void closeConnection() {
+        util.closeConnection();
     }
 }
